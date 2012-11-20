@@ -1,0 +1,50 @@
+From d2a7d481a260c70bc62285eacb22cdebdeba8e1e Mon Sep 17 00:00:00 2001
+From: Maciek Sakrejda <m.sakrejda@gmail.com>
+Date: Tue, 14 Aug 2012 21:20:24 -0700
+Subject: [PATCH] Adding pgbouncer transaction patch.
+
+Originally from http://treehou.se/~omar/postgresql-jdbc-8.4-701-pgbouncer_txn.patch
+---
+ org/postgresql/core/v3/QueryExecutorImpl.java     |    6 +++++-
+ org/postgresql/jdbc2/AbstractJdbc2Connection.java |    7 ++++++-
+ 2 files changed, 11 insertions(+), 2 deletions(-)
+
+diff --git a/org/postgresql/core/v3/QueryExecutorImpl.java b/org/postgresql/core/v3/QueryExecutorImpl.java
+index 54dd104..19df1a1 100644
+--- a/org/postgresql/core/v3/QueryExecutorImpl.java
++++ b/org/postgresql/core/v3/QueryExecutorImpl.java
+@@ -424,7 +424,11 @@ private ResultHandler sendQueryPreamble(final ResultHandler delegateHandler, int
+                 protoConnection.getTransactionState() != ProtocolConnection.TRANSACTION_IDLE)
+             return delegateHandler;
+ 
+-        sendOneQuery(beginTransactionQuery, SimpleQuery.NO_PARAMETERS, 0, 0, QueryExecutor.QUERY_NO_METADATA);
++        int beginFlags = QueryExecutor.QUERY_NO_METADATA;
++        if ((flags & QueryExecutor.QUERY_ONESHOT) != 0) {
++          beginFlags |= QueryExecutor.QUERY_ONESHOT;
++        }
++        sendOneQuery(beginTransactionQuery, SimpleQuery.NO_PARAMETERS, 0, 0, beginFlags);
+ 
+         // Insert a handler that intercepts the BEGIN.
+         return new ResultHandler() {
+diff --git a/org/postgresql/jdbc2/AbstractJdbc2Connection.java b/org/postgresql/jdbc2/AbstractJdbc2Connection.java
+index d5e38c1..4e0e97c 100644
+--- a/org/postgresql/jdbc2/AbstractJdbc2Connection.java
++++ b/org/postgresql/jdbc2/AbstractJdbc2Connection.java
+@@ -794,8 +794,13 @@ public boolean getAutoCommit() throws SQLException
+     }
+ 
+     private void executeTransactionCommand(Query query) throws SQLException {
++        int flags = QueryExecutor.QUERY_NO_METADATA | QueryExecutor.QUERY_NO_RESULTS | QueryExecutor.QUERY_SUPPRESS_BEGIN;
++        if (prepareThreshold == 0) {
++          flags |= QueryExecutor.QUERY_ONESHOT;
++        }
++
+         getQueryExecutor().execute(query, null, new TransactionCommandHandler(),
+-                                   0, 0, QueryExecutor.QUERY_NO_METADATA | QueryExecutor.QUERY_NO_RESULTS | QueryExecutor.QUERY_SUPPRESS_BEGIN);
++                                   0, 0, flags);
+     }
+ 
+     /*
+-- 
+1.7.10
+
